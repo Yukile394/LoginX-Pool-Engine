@@ -1,0 +1,94 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║         LoginX-Pool-Engine  —  GitHub Actions Workflow       ║
+# ║              Otomatik Bilardo Analiz Hattı                   ║
+# ║                  github: EnigmasHack                         ║
+# ╚══════════════════════════════════════════════════════════════╝
+#
+# Tetikleyiciler:
+#   1. Repo'ya "input.jpg" push edildiğinde otomatik başlar.
+#   2. Actions sekmesinden elle (workflow_dispatch) çalıştırılabilir.
+#
+# Çıktı:
+#   - output.jpg  → Artifacts olarak indirilebilir
+#   - output.jpg  → Otomatik commit ile repoya geri yazılır
+
+name: "EnigmasHack — Bilardo Analiz Motoru"
+
+on:
+  push:
+    paths:
+      - "input.jpg"          # Yalnızca input.jpg değiştiğinde tetikle
+  workflow_dispatch:          # Elle tetikleme butonu
+
+jobs:
+  analyze:
+    name: "Pool Engine — Analiz"
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Repoyu Klonla ────────────────────────────────────────
+      - name: "📥  Repoyu Klonla"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── 2. Python Ortamını Kur ──────────────────────────────────
+      - name: "🐍  Python 3.11 Kur"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Bağımlılıkları Yükle ─────────────────────────────────
+      - name: "📦  Bağımlılıkları Yükle"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── 4. input.jpg Varlığını Kontrol Et ───────────────────────
+      - name: "🔍  input.jpg Kontrolü"
+        run: |
+          if [ ! -f "input.jpg" ]; then
+            echo "::error::input.jpg bulunamadı. Lütfen repoya bir bilardo görüntüsü yükleyin."
+            exit 1
+          fi
+          echo "✅ input.jpg mevcut."
+          python -c "
+          import cv2, sys
+          img = cv2.imread('input.jpg')
+          if img is None:
+              print('::error::input.jpg geçerli bir görüntü değil.')
+              sys.exit(1)
+          h, w = img.shape[:2]
+          print(f'Görüntü boyutu: {w}x{h} piksel')
+          "
+
+      # ── 5. Analizi Çalıştır ──────────────────────────────────────
+      - name: "⚙️  Bilardo Analizi"
+        run: |
+          echo "──────────────────────────────────────────"
+          echo "  LoginX-Pool-Engine — EnigmasHack"
+          echo "  Yansıma Yasası & HoughCircles Motoru"
+          echo "──────────────────────────────────────────"
+          python engine.py input.jpg output.jpg
+
+      # ── 6. Çıktıyı Artifact Olarak Kaydet ───────────────────────
+      - name: "💾  output.jpg — Artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: pool-analysis-result
+          path: output.jpg
+          retention-days: 30
+
+      # ── 7. output.jpg'yi Repoya Geri Commit Et ──────────────────
+      - name: "📤  output.jpg → Repoya Commit"
+        run: |
+          git config user.name  "EnigmasHack"
+          git config user.email "enigmashack@users.noreply.github.com"
+          git add output.jpg
+          # Değişiklik yoksa commit atma
+          git diff --cached --quiet && echo "Değişiklik yok, commit atlandı." || \
+            git commit -m "🎱 [LoginX-Pool-Engine] Otomatik Analiz → output.jpg güncellendi"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
